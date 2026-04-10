@@ -1,27 +1,40 @@
-/* n8n WEBHOOK URL */
-const MAKE_WEBHOOK_URL = 'https://meenado89.app.n8n.cloud/webhook/resume-upload';
+/* ROZGARAI SCRIPT.JS
+   THIS FILE CONTROLS ALL THE INTERACTIVE BEHAVIOUR
+   OF THE ROZGARAI FRONTEND PAGE*/
 
-/* SCROLL REVEAL */
+/*  REPLIT BACKEND URL */
+const BACKEND_URL = 'https://caddie-ample-spoilage.ngrok-free.dev/api/analyse';
+
+/* ============================================================
+   SCROLL REVEAL — ELEMENTS FADE IN AS THE USER SCROLLS DOWN
+   ============================================================ */
 const revealObserver = new IntersectionObserver((entries) => {
     entries.forEach(entry => {
+        /* WHEN AN ELEMENT COMES INTO VIEW ADD THE VISIBLE CLASS */
         if (entry.isIntersecting) entry.target.classList.add('visible');
     });
 }, { threshold: 0.1 });
 
+/* TELLING THE OBSERVER TO WATCH ALL ELEMENTS WITH CLASS REVEAL */
 document.querySelectorAll('.reveal').forEach(el => revealObserver.observe(el));
 
-/* ===== DRAG AND DROP RESUME UPLOAD ===== */
+/* ============================================================
+   DRAG AND DROP RESUME UPLOAD
+   ============================================================ */
 const dropzone = document.getElementById('dropzone');
 
+/* WHEN USER DRAGS A FILE OVER THE BOX HIGHLIGHT IT */
 dropzone.addEventListener('dragover', (e) => {
     e.preventDefault();
     dropzone.classList.add('drag-over');
 });
 
+/* WHEN USER STOPS DRAGGING REMOVE THE HIGHLIGHT */
 dropzone.addEventListener('dragleave', () => {
     dropzone.classList.remove('drag-over');
 });
 
+/* WHEN USER DROPS A FILE CHECK THE TYPE AND SET IT */
 dropzone.addEventListener('drop', (e) => {
     e.preventDefault();
     dropzone.classList.remove('drag-over');
@@ -33,13 +46,18 @@ dropzone.addEventListener('drop', (e) => {
     }
 });
 
-/* ===== FILE SELECT INPUT ===== */
+/* ============================================================
+   FILE SELECT VIA CLICK
+   ============================================================ */
 function handleFileSelect(input) {
     const file = input.files[0];
     if (file) setFile(file);
 }
 
+/* STORING THE SELECTED FILE IN A VARIABLE SO WE CAN SEND IT LATER */
 let selectedFile = null;
+
+/* SHOWING THE SELECTED FILE NAME AND HIDING THE DROPZONE */
 function setFile(file) {
     selectedFile = file;
     document.getElementById('fileName').textContent = file.name;
@@ -47,6 +65,7 @@ function setFile(file) {
     dropzone.style.display = 'none';
 }
 
+/* CLEARING THE SELECTED FILE AND SHOWING THE DROPZONE AGAIN */
 function removeFile() {
     selectedFile = null;
     document.getElementById('resumeFile').value = '';
@@ -54,66 +73,114 @@ function removeFile() {
     dropzone.style.display = 'block';
 }
 
-/* ===== FORM SUBMIT ===== */
-/* ===== FORM SUBMIT ===== */
+/* ============================================================
+   ROTATING LOADER MESSAGES
+   THESE SHOW WHILE THE AI IS WORKING SO THE USER KNOWS SOMETHING IS HAPPENING
+   ============================================================ */
+const loaderMessages = [
+    'Reading your resume...',
+    'Extracting your skills...',
+    'Comparing to job requirements...',
+    'Finding skill gaps...',
+    'Matching government courses...',
+    'Selecting relevant schemes...',
+    'Writing your report...',
+    'Sending to your email...'
+];
+
+/* CYCLING THROUGH MESSAGES EVERY 2.5 SECONDS */
+function startLoaderMessages(btn) {
+    let i = 0;
+    return setInterval(() => {
+        i = (i + 1) % loaderMessages.length;
+        btn.querySelector('.btn-text').textContent = loaderMessages[i];
+    }, 2500);
+}
+
+/* ============================================================
+   FORM SUBMISSION — SENDING DATA TO THE PYTHON BACKEND
+   ============================================================ */
 document.getElementById('rozgarForm').addEventListener('submit', async (e) => {
+    /* STOPPING THE BROWSER FROM DOING ITS DEFAULT FORM SUBMIT */
     e.preventDefault();
 
+    /* CHECKING THE RESUME FILE WAS UPLOADED */
     if (!selectedFile) return showError('Please upload your resume before submitting.');
 
+    /* GETTING VALUES FROM THE FORM FIELDS */
     const jobDescription = document.getElementById('jobDescription').value.trim();
-    const userEmail = document.getElementById('userEmail').value.trim();
+    const userEmail      = document.getElementById('userEmail').value.trim();
 
+    /* CHECKING ALL FIELDS ARE FILLED IN */
     if (!jobDescription || !userEmail) return showError('Please fill in all fields.');
 
+    /* CHECKING THE FILE IS NOT TOO LARGE */
+    if (selectedFile.size > 5 * 1024 * 1024) return showError('Resume file must be under 5MB.');
+
+    /* SHOWING THE LOADING STATE ON THE BUTTON */
     const btn = document.getElementById('submitBtn');
     btn.classList.add('loading');
     btn.disabled = true;
     hideError();
-    btn.querySelector('.btn-text').textContent = 'Analyzing...';
+
+    /* STARTING THE ROTATING STATUS MESSAGES */
+    const loaderInterval = startLoaderMessages(btn);
 
     try {
-        /* ===== CREATE FORM DATA TO SEND TO N8N ===== */
+        /* BUILDING THE FORM DATA PACKAGE TO SEND TO PYTHON */
         const formData = new FormData();
-        formData.append('email', userEmail);
-        formData.append('job_description', jobDescription);
-        formData.append('data', selectedFile);  // ← CHANGED: 'resume' to 'data'
-        formData.append('filename', selectedFile.name);  // ← CHANGED: for reference
+        formData.append('email',            userEmail);
+        formData.append('job_description',  jobDescription);
+        formData.append('data',             selectedFile);   /* THE RESUME FILE */
+        formData.append('filename',         selectedFile.name);
 
-        /* ===== SEND TO N8N WEBHOOK ===== */
-        const response = await fetch(MAKE_WEBHOOK_URL, {
+        /* SENDING EVERYTHING TO THE PYTHON FLASK BACKEND */
+        const response = await fetch(BACKEND_URL, {
             method: 'POST',
-            body: formData
+            body:   formData
+            /* NOTE: DO NOT SET Content-Type HEADER — BROWSER SETS IT AUTOMATICALLY FOR FORMDATA */
         });
 
+        /* STOPPING THE ROTATING MESSAGES */
+        clearInterval(loaderInterval);
+
         if (response.ok) {
+            /* IF THE BACKEND SAYS SUCCESS SHOW THE SUCCESS SCREEN */
             document.getElementById('rozgarForm').style.display = 'none';
             document.getElementById('successMsg').classList.add('show');
-            btn.querySelector('.btn-text').textContent = 'Submit';
         } else {
-            throw new Error('Server error');
+            /* IF THE BACKEND RETURNED AN ERROR READ WHAT IT SAYS */
+            const errData = await response.json();
+            throw new Error(errData.error || 'Server error');
         }
 
     } catch (err) {
-        showError('Something went wrong. Please try again in a moment.');
+        /* IF THE REQUEST ITSELF FAILED SHOW THE ERROR MESSAGE */
+        clearInterval(loaderInterval);
+        showError('Something went wrong: ' + err.message + '. Please try again.');
         btn.classList.remove('loading');
         btn.disabled = false;
-        btn.querySelector('.btn-text').textContent = 'Submit';
+        btn.querySelector('.btn-text').textContent = '✦ Analyse My Resume — It\'s Free';
     }
 });
 
-/* ===== ERROR / SUCCESS HANDLERS ===== */
+/* ============================================================
+   HELPER FUNCTIONS FOR SHOWING AND HIDING MESSAGES
+   ============================================================ */
+
+/* SHOWING AN ERROR MESSAGE BELOW THE FORM */
 function showError(msg) {
     const el = document.getElementById('errorMsg');
     el.textContent = msg;
     el.classList.add('show');
 }
 
+/* HIDING THE ERROR MESSAGE */
 function hideError() {
     document.getElementById('errorMsg').classList.remove('show');
 }
 
-/* ===== RESET FORM ===== */
+/* RESETTING THE WHOLE FORM BACK TO ITS STARTING STATE */
 function resetForm() {
     document.getElementById('rozgarForm').reset();
     document.getElementById('rozgarForm').style.display = 'block';
@@ -122,4 +189,5 @@ function resetForm() {
     const btn = document.getElementById('submitBtn');
     btn.classList.remove('loading');
     btn.disabled = false;
+    btn.querySelector('.btn-text').textContent = '✦ Analyse My Resume — It\'s Free';
 }
