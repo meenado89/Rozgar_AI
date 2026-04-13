@@ -3,11 +3,9 @@
    OF THE ROZGARAI FRONTEND PAGE*/
 
 /*  REPLIT BACKEND URL */
-const BACKEND_URL = 'https://caddie-ample-spoilage.ngrok-free.dev/api/analyse';
+const BACKEND_URL = 'http://127.0.0.1:5000/api/analyse';
 
-/* ============================================================
-   SCROLL REVEAL — ELEMENTS FADE IN AS THE USER SCROLLS DOWN
-   ============================================================ */
+// SCROLL REVEAL ANIMATIONS USING THE INTERSECTION OBSERVER API
 const revealObserver = new IntersectionObserver((entries) => {
     entries.forEach(entry => {
         /* WHEN AN ELEMENT COMES INTO VIEW ADD THE VISIBLE CLASS */
@@ -18,9 +16,7 @@ const revealObserver = new IntersectionObserver((entries) => {
 /* TELLING THE OBSERVER TO WATCH ALL ELEMENTS WITH CLASS REVEAL */
 document.querySelectorAll('.reveal').forEach(el => revealObserver.observe(el));
 
-/* ============================================================
-   DRAG AND DROP RESUME UPLOAD
-   ============================================================ */
+// DRAG AND DROP FILE UPLOAD FUNCTIONALITY
 const dropzone = document.getElementById('dropzone');
 
 /* WHEN USER DRAGS A FILE OVER THE BOX HIGHLIGHT IT */
@@ -46,9 +42,7 @@ dropzone.addEventListener('drop', (e) => {
     }
 });
 
-/* ============================================================
-   FILE SELECT VIA CLICK
-   ============================================================ */
+// FILE SELECTED THROUGH THE BROWSE BUTTON
 function handleFileSelect(input) {
     const file = input.files[0];
     if (file) setFile(file);
@@ -73,10 +67,7 @@ function removeFile() {
     dropzone.style.display = 'block';
 }
 
-/* ============================================================
-   ROTATING LOADER MESSAGES
-   THESE SHOW WHILE THE AI IS WORKING SO THE USER KNOWS SOMETHING IS HAPPENING
-   ============================================================ */
+// ROTATING MESSAGES TO SHOW ON THE BUTTON WHILE THE AI IS WORKING - MAKES IT FEEL MORE ALIVE AND LESS BORING
 const loaderMessages = [
     'Reading your resume...',
     'Extracting your skills...',
@@ -97,9 +88,7 @@ function startLoaderMessages(btn) {
     }, 2500);
 }
 
-/* ============================================================
-   FORM SUBMISSION — SENDING DATA TO THE PYTHON BACKEND
-   ============================================================ */
+// FROM HERE ON IT'S ALL ABOUT HANDLING THE FORM SUBMISSION AND COMMUNICATING WITH THE BACKEND
 document.getElementById('rozgarForm').addEventListener('submit', async (e) => {
     /* STOPPING THE BROWSER FROM DOING ITS DEFAULT FORM SUBMIT */
     e.preventDefault();
@@ -109,7 +98,7 @@ document.getElementById('rozgarForm').addEventListener('submit', async (e) => {
 
     /* GETTING VALUES FROM THE FORM FIELDS */
     const jobDescription = document.getElementById('jobDescription').value.trim();
-    const userEmail      = document.getElementById('userEmail').value.trim();
+    const userEmail = document.getElementById('userEmail').value.trim();
 
     /* CHECKING ALL FIELDS ARE FILLED IN */
     if (!jobDescription || !userEmail) return showError('Please fill in all fields.');
@@ -129,30 +118,43 @@ document.getElementById('rozgarForm').addEventListener('submit', async (e) => {
     try {
         /* BUILDING THE FORM DATA PACKAGE TO SEND TO PYTHON */
         const formData = new FormData();
-        formData.append('email',            userEmail);
-        formData.append('job_description',  jobDescription);
-        formData.append('data',             selectedFile);   /* THE RESUME FILE */
-        formData.append('filename',         selectedFile.name);
+        formData.append('email', userEmail);
+        formData.append('job_description', jobDescription);
+        formData.append('data', selectedFile);   /* THE RESUME FILE */
+        formData.append('filename', selectedFile.name);
 
         /* SENDING EVERYTHING TO THE PYTHON FLASK BACKEND */
         const response = await fetch(BACKEND_URL, {
             method: 'POST',
-            body:   formData
-            /* NOTE: DO NOT SET Content-Type HEADER — BROWSER SETS IT AUTOMATICALLY FOR FORMDATA */
+            headers: {
+                'ngrok-skip-browser-warning': '1'
+            },
+            body: formData
         });
 
         /* STOPPING THE ROTATING MESSAGES */
         clearInterval(loaderInterval);
 
         if (response.ok) {
-            /* IF THE BACKEND SAYS SUCCESS SHOW THE SUCCESS SCREEN */
-            document.getElementById('rozgarForm').style.display = 'none';
-            document.getElementById('successMsg').classList.add('show');
-        } else {
-            /* IF THE BACKEND RETURNED AN ERROR READ WHAT IT SAYS */
-            const errData = await response.json();
-            throw new Error(errData.error || 'Server error');
-        }
+    const data = await response.json();
+    document.getElementById('rozgarForm').style.display = 'none';
+    document.getElementById('reportSection').innerHTML = `
+        <div class="report-card">
+            <div class="report-header">
+                <h2>Your RozgarAI Career Report</h2>
+                <p>Based on your resume and the job you want</p>
+            </div>
+            <div class="report-body">
+                <pre>${data.analysis}</pre>
+            </div>
+            <button onclick="location.reload()" class="btn-primary" style="margin-top:20px">
+                Analyse Another Resume
+            </button>
+        </div>
+    `;
+    document.getElementById('reportSection').style.display = 'block';
+    document.getElementById('reportSection').scrollIntoView({behavior:'smooth'});
+}
 
     } catch (err) {
         /* IF THE REQUEST ITSELF FAILED SHOW THE ERROR MESSAGE */
@@ -164,9 +166,7 @@ document.getElementById('rozgarForm').addEventListener('submit', async (e) => {
     }
 });
 
-/* ============================================================
-   HELPER FUNCTIONS FOR SHOWING AND HIDING MESSAGES
-   ============================================================ */
+// HELPER FUNCTIONS FOR MANAGING THE FORM STATE AND ERROR MESSAGES
 
 /* SHOWING AN ERROR MESSAGE BELOW THE FORM */
 function showError(msg) {
